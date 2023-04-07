@@ -1,4 +1,5 @@
 import torch
+import clip
 import torch.nn as nn
 import torch.nn.init
 import torchvision.models as models
@@ -18,6 +19,7 @@ import torch.optim as optim
 
 from models import DecoderRNN, EncoderRNN, S2VTAttModel, S2VTModel
 from torch import nn
+
 
 
 def l2norm(X):
@@ -175,7 +177,7 @@ class EncoderImagePrecomp(nn.Module):
         # print(images)
         # images = images.view(images.size(0), 73728)
         features = self.fc(images)
-
+        
         # normalize in the joint embedding space
         if not self.no_imgnorm:
             features = l2norm(features)
@@ -210,7 +212,6 @@ class EncoderImagePrecompAttn(nn.Module):
         self.data_name = data_name
 
         self.fc = nn.Linear(img_dim, embed_size)
-
         self.init_weights()
 
 
@@ -235,7 +236,7 @@ class EncoderImagePrecompAttn(nn.Module):
         self.Text_GCN_2 = Rs_GCN(in_channels=embed_size, inter_channels=embed_size)
         self.Text_GCN_3 = Rs_GCN(in_channels=embed_size, inter_channels=embed_size)
         self.Text_GCN_4 = Rs_GCN(in_channels=embed_size, inter_channels=embed_size)
-
+  
     def init_weights(self):
         """Xavier initialization for the fully connected layer
         """
@@ -244,11 +245,16 @@ class EncoderImagePrecompAttn(nn.Module):
         self.fc.weight.data.uniform_(-r, r)
         self.fc.bias.data.fill_(0)
 
+
     def forward(self, images, scene_text):
         """Extract image feature vectors."""
 
         # IMAGE FEATURES
         fc_img_emd = self.fc(images)
+        
+
+
+        
         if self.data_name != 'f30k_precomp':
             fc_img_emd = l2norm(fc_img_emd)
 
@@ -262,13 +268,18 @@ class EncoderImagePrecompAttn(nn.Module):
         GCN_img_emd = self.Rs_GCN_2(GCN_img_emd)
         GCN_img_emd = self.Rs_GCN_3(GCN_img_emd)
         GCN_img_emd = self.Rs_GCN_4(GCN_img_emd)
+
         # -> B,N,D
         GCN_img_emd = GCN_img_emd.permute(0, 2, 1)
         GCN_img_emd = l2norm(GCN_img_emd)
+       
 
         rnn_img, hidden_state = self.img_rnn(GCN_img_emd)
         visual_features = hidden_state[0]
 
+        
+
+        
         # SCENE TEXT FEATURES --- AM --------
         fc_scene_text = self.bn_scene_text(scene_text)
         fc_scene_text = F.leaky_relu(self.fc_scene_text(fc_scene_text))
@@ -285,7 +296,9 @@ class EncoderImagePrecompAttn(nn.Module):
         GCN_scene_text_emd = GCN_scene_text_emd.permute(0, 2, 1)
         GCN_scene_text_emd = l2norm(GCN_scene_text_emd)
         fc_scene_text = torch.mean(GCN_scene_text_emd, dim=1)
+        
 
+        
         # FINAL AGGREGATION
         # fc_scene_text = torch.mean(fc_scene_text, dim=1)
         features = torch.mul(visual_features, fc_scene_text) + visual_features
@@ -304,7 +317,7 @@ class EncoderImagePrecompAttn(nn.Module):
             features = torch.abs(features)
 
         return features, GCN_img_emd
-
+ 
     def load_state_dict(self, state_dict):
         """Copies parameters. overwritting the default one to
         accept state_dict from Full model
@@ -556,15 +569,15 @@ class VSRN(object):
         # Forward
 
         cap_emb = self.txt_enc(captions, lengths)
-        img_emb, GCN_img_emd = self.img_enc(images, scene_text)
+        img_emb, GCN_img_emd = self.img_enc(images, scene_text)#the img_emb has fusion with the scene-text ocr
         return img_emb, cap_emb, GCN_img_emd
 
     def forward_loss(self, img_emb, cap_emb, **kwargs):
         """Compute the loss given pairs of image and caption embeddings
         """
         loss = self.criterion(img_emb, cap_emb)
-        # self.logger.update('Le', loss.data[0], img_emb.size(0))
-        self.logger.update('Le_retrieval', loss.data[0], img_emb.size(0))
+        # self.logger.update('Le', loss.data[0], img_emb.size(0)) loss.data[0] is deprecated in pytorch --version >4.0 using loss.item() instead
+        self.logger.update('Le_retrieval', loss.item(), img_emb.size(0))
         return loss
 
     def train_emb(self, images, captions, lengths, ids, caption_labels, caption_masks, scene_text, *args):
@@ -592,8 +605,8 @@ class VSRN(object):
         loss = 2.0 * retrieval_loss + caption_loss
 
 
-        self.logger.update('Le_caption', caption_loss.data[0], img_emb.size(0))
-        self.logger.update('Le', loss.data[0], img_emb.size(0))
+        self.logger.update('Le_caption', caption_loss.item(), img_emb.size(0))
+        self.logger.update('Le', loss.item(), img_emb.size(0))
 
         # compute gradient and do SGD step
         loss.backward()
