@@ -316,7 +316,7 @@ class EncoderImagePrecompAttn(nn.Module):
         if self.use_abs:
             features = torch.abs(features)
 
-        return features, GCN_img_emd
+        return features, GCN_img_emd, visual_features# add visual_features for loss_calculation
  
     def load_state_dict(self, state_dict):
         """Copies parameters. overwritting the default one to
@@ -569,8 +569,8 @@ class VSRN(object):
         # Forward
 
         cap_emb = self.txt_enc(captions, lengths)
-        img_emb, GCN_img_emd = self.img_enc(images, scene_text)#the img_emb has fusion with the scene-text ocr
-        return img_emb, cap_emb, GCN_img_emd
+        img_emb, GCN_img_emd, visual_features = self.img_enc(images, scene_text)#the img_emb has fusion with the scene-text ocr##################################
+        return img_emb, cap_emb, GCN_img_emd, visual_features
 
     def forward_loss(self, img_emb, cap_emb, **kwargs):
         """Compute the loss given pairs of image and caption embeddings
@@ -579,7 +579,15 @@ class VSRN(object):
         # self.logger.update('Le', loss.data[0], img_emb.size(0)) loss.data[0] is deprecated in pytorch --version >4.0 using loss.item() instead
         self.logger.update('Le_retrieval', loss.item(), img_emb.size(0))
         return loss
-
+    
+    def forward_loss_add_new(self, visual_features, cap_emb, **kwargs):
+        """Compute the loss given pairs of image and caption embeddings
+        """
+        loss_add_new = self.criterion(visual_features, cap_emb)
+        # add new loss
+        self.logger.update('loss_add_new_retrieval', loss_add_new.item(), visual_features.size(0))
+        return loss_add_new
+    
     def train_emb(self, images, captions, lengths, ids, caption_labels, caption_masks, scene_text, *args):
         """One training step given images and captions.
         """
@@ -588,7 +596,7 @@ class VSRN(object):
         self.logger.update('lr', self.optimizer.param_groups[0]['lr'])
 
         # compute the embeddings
-        img_emb, cap_emb, GCN_img_emd = self.forward_emb(images, captions, lengths, scene_text)
+        img_emb, cap_emb, GCN_img_emd, visual_features = self.forward_emb(images, captions, lengths, scene_text)
 
 
         # calcualte captioning loss
@@ -600,13 +608,15 @@ class VSRN(object):
         # measure accuracy and record loss
         self.optimizer.zero_grad()
         retrieval_loss = self.forward_loss(img_emb, cap_emb)
+        add_new_loss = self.forward_loss_add_new(visual_features, cap_emb)
 
-
-        loss = 2.0 * retrieval_loss + caption_loss
+        loss = 2.0 * retrieval_loss + caption_loss +add_new_loss
 
 
         self.logger.update('Le_caption', caption_loss.item(), img_emb.size(0))
+        self.logger.update('Add new loss', add_new_loss.item(), img_emb.size(0))
         self.logger.update('Le', loss.item(), img_emb.size(0))
+
 
         # compute gradient and do SGD step
         loss.backward()
