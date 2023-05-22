@@ -228,8 +228,8 @@ class EncoderImagePrecompAttn(nn.Module):
             self.bn = nn.BatchNorm1d(embed_size)
 
         # FOR SCENE TEXT FEATURES
-        self.bn_scene_text = nn.BatchNorm1d(text_number)
-        self.fc_scene_text = nn.Linear(text_dim, embed_size)
+        self.bn_scene_text = nn.BatchNorm1d(text_number)# 对应的是20 * 300(fasttext) + 2048(fasterrcnn_feature)
+        self.fc_scene_text = nn.Linear(300+2048, embed_size)
 
         # GCN reasoning
         self.Text_GCN_1 = Rs_GCN(in_channels=embed_size, inter_channels=embed_size)
@@ -281,7 +281,7 @@ class EncoderImagePrecompAttn(nn.Module):
 
         
         # SCENE TEXT FEATURES --- AM --------
-        fc_scene_text = self.bn_scene_text(scene_text)
+        fc_scene_text = self.bn_scene_text(scene_text)# 归一化之后的
         fc_scene_text = F.leaky_relu(self.fc_scene_text(fc_scene_text))
         fc_scene_text = l2norm(fc_scene_text)
 
@@ -610,7 +610,7 @@ class VSRN(object):
         retrieval_loss = self.forward_loss(img_emb, cap_emb)
         add_new_loss = self.forward_loss_add_new(visual_features, cap_emb)
 
-        loss = 2.0 * retrieval_loss + caption_loss +add_new_loss
+        loss = 2.0 * retrieval_loss + caption_loss ############# tried 1.0, 0.8 0.5 0.2 0.05
 
 
         self.logger.update('Le_caption', caption_loss.item(), img_emb.size(0))

@@ -134,7 +134,7 @@ class FlickrDataset(data.Dataset):
 
         # Convert caption (string) to word ids.
         tokens = nltk.tokenize.word_tokenize(
-            str(caption).lower().decode('utf-8'))
+            str(caption).lower().encode('utf-8').decode('utf-8'))
         caption = []
         caption.append(vocab('<start>'))
         caption.extend([vocab(token) for token in tokens])
@@ -162,7 +162,7 @@ class PrecompDataset(data.Dataset):
         with open(loc+'%s_caps.txt' % data_split, 'rb') as f:
             for line in f:
                 self.captions.append(line.strip())
-                tokens = nltk.tokenize.word_tokenize(str(line.strip()).lower().decode('utf-8'))
+                tokens = nltk.tokenize.word_tokenize(str(line.strip()).lower().encode('utf-8').decode('utf-8'))
                 token_caption.append(tokens)
 
         each_cap_lengths = [len(cap) for cap in token_caption]
@@ -170,7 +170,7 @@ class PrecompDataset(data.Dataset):
         print(calculate_max_len)
 
         # Image features
-        self.images = np.load(loc+'%s_ims.npy' % data_split)
+        self.images = np.load(loc+'%s_ims.npy' % data_split, mmap_mode = 'r')# 加快读取速度
         self.length = len(self.captions)
         # rkiros data has redundancy in images, we divide by 5, 10crop doesn't
         if self.images.shape[0] != self.length:
@@ -191,7 +191,7 @@ class PrecompDataset(data.Dataset):
         self.max_len = opt.max_len
 
         # Load Scene Text Features
-        self.text_features = np.load(loc + '%s_ocr_feats.npy' % data_split)
+        self.text_features = np.load(loc + '%s_ocr_feats.npy' % data_split, mmap_mode = 'r')# (56636, 20, 300+2048)
         # Number of scene text instances
         self.text_number = opt.text_number
         # Scene text insembedding dim
@@ -200,7 +200,7 @@ class PrecompDataset(data.Dataset):
 
     def __getitem__(self, index):
         # handle the image redundancy
-        img_id = index/self.im_div
+        img_id = index//self.im_div
         image = torch.Tensor(self.images[img_id])
         caption = self.captions[index]
         vocab = self.vocab
@@ -210,11 +210,11 @@ class PrecompDataset(data.Dataset):
         text_features = torch.Tensor(text_features)
 
         # Convert caption (string) to word ids.
-        tokens = nltk.tokenize.word_tokenize(str(caption).lower().decode('utf-8'))
+        tokens = nltk.tokenize.word_tokenize(str(caption).lower().encode('utf-8').decode('utf-8'))
         caption = []
         caption.append(vocab('<start>'))
         caption.extend([vocab(token) for token in tokens])
-        caption.append(vocab('<end>'))
+        caption.append(vocab('<end>'))##caption's ids
         target = torch.Tensor(caption)
 
         ##### deal with caption model data
@@ -285,7 +285,7 @@ def get_loader_single(data_name, split, root, json, vocab, transform,
                       num_workers=2, ids=None, collate_fn=collate_fn):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
     if 'f8k' in data_name or 'f30k' in data_name:
-        dataset = FlickrDataset(root=root,
+        dataset = FlickrDataset(root=root,#实例化类,能够传入参数
                                 split=split,
                                 json=json,
                                 vocab=vocab,

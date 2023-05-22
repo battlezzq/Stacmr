@@ -16,19 +16,20 @@ import argparse
 
 
 def main():
+
     # Hyper Parameters
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', default='/data',
                         help='path to datasets')
-    parser.add_argument('--data_name', default='precomp',
+    parser.add_argument('--data_name', default='f30k',
                         help='{coco,f8k,f30k,10crop}_precomp|coco|f8k|f30k')
-    parser.add_argument('--vocab_path', default='./vocab/',
+    parser.add_argument('--vocab_path', default='./vocab/',####./vocab/
                         help='Path to saved vocabulary pickle files.')
     parser.add_argument('--margin', default=0.2, type=float,
                         help='Rank loss margin.')
-    parser.add_argument('--num_epochs', default=30, type=int,
+    parser.add_argument('--num_epochs', default=10, type=int,
                         help='Number of training epochs.')
-    parser.add_argument('--batch_size', default=128, type=int,
+    parser.add_argument('--batch_size', default=16, type=int,
                         help='Size of a training mini-batch.')
     parser.add_argument('--word_dim', default=300, type=int,
                         help='Dimensionality of the word embedding.')
@@ -44,7 +45,7 @@ def main():
                         help='Initial learning rate.')
     parser.add_argument('--lr_update', default=15, type=int,
                         help='Number of epochs to update the learning rate.')
-    parser.add_argument('--workers', default=10, type=int,
+    parser.add_argument('--workers', default=10, type=int,#载入数据的通道数
                         help='Number of data loader workers.')
     parser.add_argument('--log_step', default=10, type=int,
                         help='Number of steps to print and record the log.')
@@ -75,9 +76,9 @@ def main():
                         help='Ensure the training is always done in '
                         'train mode (Not recommended).')
     ### AM Parameters
-    parser.add_argument('--text_number', default=15, type=int,
+    parser.add_argument('--text_number', default=20, type=int,
                         help='Number of ocr tokens used (max. 20).')
-    parser.add_argument('--text_dim', default=300, type=int,
+    parser.add_argument('--text_dim', default=300, type=int,# 20 * 300(fasttext) + 2048(frcnn_feature)
                         help='Dimension of scene text embedding - default 300')
 
     ###caption parameters
@@ -139,6 +140,11 @@ def main():
 
     # Construct the model
     model = VSRN(opt)
+    # # multi GPU setting
+    # device_ids = [1]################################4444444444444444
+    # model = torch.nn.DataParallel(VSRN(opt),device_ids=device_ids)
+    # model = model.to(device_ids)##############################3333333333333333
+
 
     # optionally resume from a checkpoint
     if opt.resume:
@@ -184,6 +190,7 @@ def main():
 
 
 def train(opt, train_loader, model, epoch, val_loader, best_rsum):
+
     # average meters to record the training statistics
     batch_time = AverageMeter()
     data_time = AverageMeter()
